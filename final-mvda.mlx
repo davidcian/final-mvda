@@ -4,16 +4,17 @@ load testecg
 % Extract information about sample
 healthy_sample_size = size(healthy,1)
 diseased_sample_size = size(diseased,1)
+timeseries_length = size(healthy,2)
 
 % Compute estimates of normalized autocorrelations
-acf_h = zeros(healthy_sample_size, 21);
+acf_h = zeros(healthy_sample_size, timeseries_length);
 for row=1:healthy_sample_size 
-    acf_h(row,:) = autocorr(healthy(row,:));
+    acf_h(row,:) = autocorr(healthy(row,:),'NumLags',timeseries_length-1);
 end
 
-acf_d = zeros(diseased_sample_size, 21);
+acf_d = zeros(diseased_sample_size, timeseries_length);
 for row=1:diseased_sample_size 
-    acf_d(row,:) = autocorr(diseased(row,:));
+    acf_d(row,:) = autocorr(diseased(row,:),'NumLags',timeseries_length-1);
 end
 
 % Compute the means of the estimated autocorrelations
@@ -88,9 +89,9 @@ false_positives = best_acf_d(cp_diseased > 0.5)
 
 % Classify the test sample
 unknown_sample_size = size(unknown,1);
-acf_u = zeros(unknown_sample_size, 21);
+acf_u = zeros(unknown_sample_size, timeseries_length);
 for row=1:unknown_sample_size
-    acf_u(row,:) = autocorr(unknown(row,:));
+    acf_u(row,:) = autocorr(unknown(row,:),'NumLags',timeseries_length-1);
 end
 best_acf_u = acf_u(:,best_k)
 cp_healthy_u = arrayfun(@cond_prob_healthy, best_acf_u)
@@ -102,7 +103,7 @@ labels(cp_healthy_u > 0.5) = 'H';
 labels(cp_healthy_u == 0.5) = 'U';
 labels(cp_healthy_u < 0.5) = 'D';
 
-labels
+labels'
 
 function f1 = prob_autocorr(value)
     global healthy_mean
