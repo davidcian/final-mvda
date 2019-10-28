@@ -1,0 +1,122 @@
+load trainecg
+load testecg
+
+% Extract information about sample
+healthy_sample_size = size(healthy,1)
+diseased_sample_size = size(diseased,1)
+
+% Compute estimates of normalized autocorrelations
+acf_h = zeros(healthy_sample_size, 21);
+for row=1:healthy_sample_size 
+    acf_h(row,:) = autocorr(healthy(row,:));
+end
+
+acf_d = zeros(diseased_sample_size, 21);
+for row=1:diseased_sample_size 
+    acf_d(row,:) = autocorr(diseased(row,:));
+end
+
+% Compute the means of the estimated autocorrelations
+acf_h_m = mean(acf_h)
+acf_d_m = mean(acf_d)
+
+% Plot the estimates
+plot(acf_h',"b")
+hold on
+plot(acf_d',"r")
+hold on
+plot(acf_h_m,"c","LineWidth",4)
+hold on
+plot(acf_d_m,"m","LineWidth",4)
+hold off
+
+% Compute the absolute difference between the means
+means_diff = abs(acf_h_m - acf_d_m)
+
+% Plot the absolute difference
+plot(means_diff)
+
+% Find lag value for which the difference is largest
+[max_diff, best_k] = max(means_diff)
+
+% Extract the autocorrelation values at best_k
+best_acf_h = acf_h(:,best_k)
+best_acf_d = acf_d(:,best_k)
+
+% Plot the histogram of autocorrelation at best_k for healthy and diseased
+histogram(best_acf_h,"FaceColor","green")
+histogram(best_acf_d,"FaceColor","red")
+
+% Compute probabilities of being healthy or diseased
+number_of_subjects = healthy_sample_size + diseased_sample_size
+global p_healthy
+global p_diseased
+p_healthy = healthy_sample_size / number_of_subjects
+p_diseased = 1 - p_healthy
+
+% Compute mean of PDFs
+global healthy_mean
+global diseased_mean
+healthy_mean = mean(best_acf_h)
+diseased_mean = mean(best_acf_d)
+
+% Compute variance of PDFs
+global healthy_variance
+global diseased_variance
+healthy_variance = var(best_acf_h)
+diseased_variance = var(best_acf_d)
+
+% Create normal distributions
+x = [-1:0.001:1];
+d_norm_distrib = normpdf(x, diseased_mean, sqrt(diseased_variance))
+h_norm_distrib = normpdf(x, healthy_mean, sqrt(healthy_variance))
+
+% Plot the normal distributions
+plot(x, h_norm_distrib, "b")
+hold on
+plot(x, d_norm_distrib, "r")
+hold off
+
+% Classify the scans according to the MAP rule
+cp_healthy = arrayfun(@cond_prob_healthy, best_acf_h)
+cp_diseased = arrayfun(@cond_prob_healthy, best_acf_d)
+
+true_positives = best_acf_h(cp_healthy > 0.5)
+false_negatives = best_acf_h(cp_healthy < 0.5)
+true_negatives = best_acf_d(cp_diseased < 0.5)
+false_positives = best_acf_d(cp_diseased > 0.5)
+
+% Classify the test sample
+unknown_sample_size = size(unknown,1);
+acf_u = zeros(unknown_sample_size, 21);
+for row=1:unknown_sample_size
+    acf_u(row,:) = autocorr(unknown(row,:));
+end
+best_acf_u = acf_u(:,best_k)
+cp_healthy_u = arrayfun(@cond_prob_healthy, best_acf_u)
+
+labels = zeros(unknown_sample_size,1);
+labels = char(labels);
+
+labels(cp_healthy_u > 0.5) = 'H';
+labels(cp_healthy_u == 0.5) = 'U';
+labels(cp_healthy_u < 0.5) = 'D';
+
+labels
+
+function f1 = prob_autocorr(value)
+    global healthy_mean
+    global diseased_mean
+    global healthy_variance
+    global diseased_variance
+    global p_healthy
+    global p_diseased
+    f1 = p_healthy * normpdf(value, healthy_mean, sqrt(healthy_variance)) + p_diseased * normpdf(value, diseased_mean, sqrt(diseased_variance));
+end
+
+function f2 = cond_prob_healthy(value)
+    global healthy_mean
+    global healthy_variance
+    global p_healthy
+    f2 = (normpdf(value, healthy_mean, sqrt(healthy_variance)) * p_healthy) / prob_autocorr(value);
+end
